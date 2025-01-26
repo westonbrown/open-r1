@@ -42,20 +42,20 @@ module load cuda/12.1
 MODELS=(
     # "/fsx/elie_bakouch/open-r1/model/qwen-1.5-r1"
     # "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
-    # "HuggingFaceH4/Qwen-Math-1.5B-Bespoke-ep3-3e5-128GBS"
-    "/fsx/elie_bakouch/open-r1/data/bespoke-ep3-3e5-32k"
-    "/fsx/elie_bakouch/open-r1/data/bespoke-ep3-6e5-32k"
-    "/fsx/elie_bakouch/open-r1/data/bespoke-ep3-3e5-32k-500k-rope"
-    "/fsx/elie_bakouch/open-r1/data/bespoke-ep3-6e5-32k-500k-rope"
+    "HuggingFaceH4/Qwen-Math-1.5B-Bespoke-ep3-3e5-128GBS"
+    "/fsx/elie_bakouch/open-r1/data/bespoke-ep3-cosine-1e-4-optim-adamw_torch-4k"
+    "/fsx/elie_bakouch/open-r1/data/bespoke-ep3-cosine-6e-5-optim-adamw_torch-4k"
+    "/fsx/elie_bakouch/open-r1/data/bespoke-ep3-linear-1e-4-optim-adamw_torch-4k"
+    "/fsx/elie_bakouch/open-r1/data/bespoke-ep3-linear-6e-5-optim-adamw_torch-4k"
     # "HuggingFaceH4/Qwen-Math-1.5B-Bespoke-ep3-3e5-128GBS"
 )
 
-OUTPUT_DIR=./data/32k-eval/
+OUTPUT_DIR=./data/4k-eval/
 for MODEL in "${MODELS[@]}"
 do
-    MODEL_ARGS="pretrained=$MODEL,dtype=float16,data_parallel_size=$NUM_GPUS,max_model_length=32768,gpu_memory_utilisation=0.8"
+    MODEL_ARGS="pretrained=$MODEL,dtype=float16,data_parallel_size=$NUM_GPUS,max_model_length=4096,gpu_memory_utilisation=0.8"
     lighteval vllm $MODEL_ARGS "custom|aime24|0|0,custom|math_500|0|0" \
-        --custom-tasks src/open_r1/evaluate.py \
+        --custom-tasks src/open_r1/evaluate_4k.py \
         --use-chat-template \
         --system-prompt="Please reason step by step, and put your final answer within \boxed{}." \
         --push-to-hub \
