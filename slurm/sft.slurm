@@ -4,21 +4,39 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --exclusive
 #SBATCH --gres=gpu:8
+#SBATCH --qos=high
 #SBATCH --partition=hopper-prod 
 #SBATCH --output=./logs/%x-%j.out
 #SBATCH --err=./logs/%x-%j.err
 
 set -x -e
 
+# Save a copy of this script using the actual job name and ID
+OUTPUT_SLURM_SCRIPT=./logs/slurm/
+cp $0 "${OUTPUT_SLURM_SCRIPT}/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.slurm"
+echo "saved script $0 to ${OUTPUT_SLURM_SCRIPT}/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.slurm"
+
 source ~/.bashrc
 conda activate openr1
 echo "START TIME: $(date)"
 echo "PYTHON ENV: $(which python)"
 
-MODEL_PATH=$1
-DATASET_PATH=$2
-ACCELERATOR=$3
+# MODEL_PATH=/fsx/elie_bakouch/open-r1/model/qwen-math-1.5B-32k
+MODEL_PATH=Qwen/Qwen2.5-Math-1.5B
+DATASET_PATH=HuggingFaceTB/Bespoke-Stratos-17k
+ACCELERATOR=zero3
 
+LR=6e-5
+optim=adamw_torch
+#  if we need to save memory--optim {adamw_hf,adamw_torch,adamw_torch_fused,adamw_torch_xla,adamw_torch_npu_fused,adamw_apex_fused,adafactor,adamw_anyprecision,adamw_torch_4bit,adamw_torch_8bit,ademamix,sgd,adagrad,adamw_bnb_8bit,adamw_8bit,ademamix_8bit,lion_8bit,lion_32bit,paged_adamw_32bit,paged_adamw_8bit,paged_ademamix_32bit,paged_ademamix_8bit,paged_lion_32bit,paged_lion_8bit,rmsprop,rmsprop_bnb,rmsprop_bnb_8bit,rmsprop_bnb_32bit,galore_adamw,galore_adamw_8bit,galore_adafactor,galore_adamw_layerwise,galore_adamw_8bit_layerwise,galore_adafactor_layerwise,lomo,adalomo,grokadamw,schedule_free_adamw,schedule_free_sgd}
+#   --adam_beta1 ADAM_BETA1, --adam-beta1 ADAM_BETA1
+#                         Beta1 for AdamW optimizer (default: 0.9)
+#   --adam_beta2 ADAM_BETA2, --adam-beta2 ADAM_BETA2
+#                         Beta2 for AdamW optimizer (default: 0.999)
+# adam-b1=0.9
+# adam-b2=0.999
+scheduler=linear
+#  --lr_scheduler_type {linear,cosine,cosine_with_restarts,polynomial,constant,constant_with_warmup,inverse_sqrt,reduce_lr_on_plateau,cosine_with_min_lr,warmup_stable_decay}, --lr-scheduler-type {linear,cosine,cosine_with_restarts,polynomial,constant,constant_with_warmup,inverse_sqrt,reduce_lr_on_plateau,cosine_with_min_lr,warmup_stable_decay}
 # Training setup
 NUM_NODES=$SLURM_NNODES
 GPUS_PER_NODE=8
@@ -33,8 +51,12 @@ export CMD=" \
     --model_name_or_path $MODEL_PATH \
     --dataset_name $DATASET_PATH \
     --use_liger_kernel true \
-    --learning_rate 2.0e-5 \
-    --num_train_epochs 1 \
+    --lr_scheduler_type $scheduler \
+    --learning_rate $LR \
+    --warmup_ratio 0.1 \
+    --optim $optim \
+    --num_train_epochs 3 \
+    --max_steps -1 \
     --packing \
     --max_seq_length 4096 \
     --per_device_train_batch_size 4 \
@@ -43,9 +65,12 @@ export CMD=" \
     --gradient_checkpointing \
     --bf16 \
     --logging_steps 5 \
-    --eval_strategy steps \
-    --eval_steps 100 \
-    --output_dir data/Qwen2.5-1.5B-Open-R1-Distill
+    --eval_strategy epoch \
+    --output_dir data/bespoke-ep3-$scheduler-$LR-optim-$optim-4k \
+    --hub_model_id HuggingFaceTB/Qwen-Math-1.5B-Bespoke-sys-ep3-$scheduler-$LR-optim-$optim-4k \
+    --report_to wandb \
+    --push_to_hub \
+    --hub_strategy every_save
     "
 
 export LAUNCHER="HF_HUB_ENABLE_HF_TRANSFER=1 ACCELERATE_LOG_LEVEL=info TRANSFORMERS_VERBOSITY=info accelerate launch \
