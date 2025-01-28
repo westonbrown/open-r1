@@ -72,6 +72,10 @@ while [[ $# -gt 0 ]]; do
             HF_OUTPUT_DATASET="$2"
             shift 2
             ;;
+        --hf-checkpoint-dataset)
+            HF_CHECKPOINT_DATASET="$2"
+            shift 2
+            ;;
         --private)
             PRIVATE="true"
             shift
@@ -117,6 +121,7 @@ echo "CLIENT_REPLICAS: $CLIENT_REPLICAS"
 echo "TIMEOUT: $TIMEOUT"
 echo "RETRIES: $RETRIES"
 echo "HF_OUTPUT_DATASET: $HF_OUTPUT_DATASET"
+echo "HF_CHECKPOINT_DATASET: $HF_CHECKPOINT_DATASET"
 echo "PRIVATE: $PRIVATE"
 echo "-------------------"
 
@@ -234,6 +239,7 @@ RAY_ADDRESS="http://$head_node_ip:8265" ray job submit \
     --timeout "$TIMEOUT" \
     --retries "$RETRIES" \
     ${HF_OUTPUT_DATASET:+--hf-output-dataset "$HF_OUTPUT_DATASET"} \
+    ${HF_CHECKPOINT_DATASET:+--hf-checkpoint-dataset "$HF_CHECKPOINT_DATASET"} \
     ${PRIVATE:+--private} \
     --vllm-server-url "http://$head_node_ip:8000/v1"
 

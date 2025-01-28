@@ -18,6 +18,7 @@ from distilabel.llms import OpenAILLM
 from distilabel.pipeline import Pipeline
 from distilabel.steps import StepResources
 from distilabel.steps.tasks import TextGeneration
+from distilabel.steps import HuggingFaceHubCheckpointer
 
 
 def build_distilabel_pipeline(
@@ -33,6 +34,7 @@ def build_distilabel_pipeline(
     client_replicas: int = 1,
     timeout: int = 900,
     retries: int = 0,
+    repo_id_checkpoint: str = ""
 ) -> Pipeline:
     generation_kwargs = {"max_new_tokens": max_new_tokens}
 
@@ -43,7 +45,7 @@ def build_distilabel_pipeline(
         generation_kwargs["top_p"] = top_p
 
     with Pipeline().ray() as pipeline:
-        TextGeneration(
+        text_generation = TextGeneration(
             llm=OpenAILLM(
                 base_url=base_url,
                 api_key="something",
@@ -59,6 +61,12 @@ def build_distilabel_pipeline(
             group_generations=True,
             resources=StepResources(replicas=client_replicas),
         )
+        checkpoint = HuggingFaceHubCheckpointer(
+            repo_id=repo_id_checkpoint,
+            private=True,
+            input_batch_size=50
+        )
+        text_generation >> checkpoint
 
     return pipeline
 
@@ -163,6 +171,12 @@ if __name__ == "__main__":
         help="HuggingFace repo to push results to",
     )
     parser.add_argument(
+        "--hf-checkpoint-dataset",
+        type=str,
+        required=False,
+        help="HuggingFace repo to checkpoint the intermediate outputs",
+    )
+    parser.add_argument(
         "--private",
         action="store_true",
         help="Whether to make the output dataset private when pushing to HF Hub",
@@ -192,6 +206,7 @@ if __name__ == "__main__":
         client_replicas=args.client_replicas,
         timeout=args.timeout,
         retries=args.retries,
+        repo_id_checkpoint=args.hf_checkpoint_dataset
     )
 
     print("Running generation pipeline...")
