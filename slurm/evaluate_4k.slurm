@@ -41,13 +41,6 @@ module load cuda/12.1
 
 MODELS=(
     # "/fsx/elie_bakouch/open-r1/model/qwen-1.5-r1"
-    # "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
-    "HuggingFaceH4/Qwen-Math-1.5B-Bespoke-ep3-3e5-128GBS"
-    "/fsx/elie_bakouch/open-r1/data/bespoke-ep3-cosine-1e-4-optim-adamw_torch-4k"
-    "/fsx/elie_bakouch/open-r1/data/bespoke-ep3-cosine-6e-5-optim-adamw_torch-4k"
-    "/fsx/elie_bakouch/open-r1/data/bespoke-ep3-linear-1e-4-optim-adamw_torch-4k"
-    "/fsx/elie_bakouch/open-r1/data/bespoke-ep3-linear-6e-5-optim-adamw_torch-4k"
-    # "HuggingFaceH4/Qwen-Math-1.5B-Bespoke-ep3-3e5-128GBS"
 )
 
 OUTPUT_DIR=./data/4k-eval/
