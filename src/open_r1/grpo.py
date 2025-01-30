@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass, field
 
 from datasets import load_dataset
-
+import torch
 from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
 from open_r1.configs import GRPOConfig
@@ -98,7 +98,6 @@ SYSTEM_PROMPT = (
     "<think> reasoning process here </think><answer> answer here </answer>"
 )
 
-
 def main(script_args, training_args, model_args):
     # Get reward functions
     reward_funcs = [reward_funcs_registry[func] for func in script_args.reward_funcs]
@@ -110,16 +109,40 @@ def main(script_args, training_args, model_args):
     def make_conversation(example):
         return {
             "prompt": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                # {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": example["problem"]},
             ],
         }
 
+
+
     dataset = dataset.map(make_conversation)
     if "messages" in dataset.column_names:
-        # (Ed) not sure if this is required
         dataset = dataset.remove_columns("messages")
 
+    
+    training_args.model_init_kwargs ={
+        "attn_implementation":model_args.attn_implementation,
+    }
+    torch_dtype = (
+        model_args.torch_dtype
+        if model_args.torch_dtype in ["auto", None]
+        else getattr(torch, model_args.torch_dtype)
+    )
+    
+    
+    model_kwargs = dict(
+        revision=model_args.model_revision,
+        trust_remote_code=model_args.trust_remote_code,
+        attn_implementation=model_args.attn_implementation,
+        torch_dtype=torch_dtype,
+        use_cache=False if training_args.gradient_checkpointing else True,
+    )
+    
+    if training_args.gradient_checkpointing is True:
+        training_args.gradient_checkpointing_kwargs = {"use_reentrant": True}
+    
+    training_args.model_init_kwargs = model_kwargs
     # Initialize the GRPO trainer
     trainer = GRPOTrainer(
         model=model_args.model_name_or_path,
