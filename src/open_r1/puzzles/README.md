@@ -62,7 +62,7 @@ as a guide. To add a new task:
 2) In the task file, create a `Task` class that inherits from `BaseTask` and a `Config` class that inherits from `BaseConfig`.
 3) For the `Config` class, add any config properties your `Task` is going to use
 4) For the `Task` class, set `config_class` to the `Config` class you just created and implement two methods:
-    - `generate_sample` should return a tuple of a task question, and the correct answer. Importantly, the task receives `rng` as an argument,
+    - `generate_sample` should return a dict containing the question and the `ground_truth` answer. Importantly, the task receives `rng` as an argument,
       which is an instance of a NumPy generator class. Any random generations, shuffles, etc. that your class needs to generate task instances
       should use methods on `rng`. You should **never** `import random` and generate your own random numbers, or else reproducibility will be lost!
     - `verify` receives `output` and `answer` as arguments and returns a score between 0 and 1. Some tasks may only return 0. for incorrect answers
