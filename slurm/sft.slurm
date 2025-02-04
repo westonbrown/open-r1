@@ -22,12 +22,16 @@ echo "START TIME: $(date)"
 echo "PYTHON ENV: $(which python)"
 
 # MODEL_PATH=/fsx/elie_bakouch/open-r1/model/qwen-math-1.5B-32k
-MODEL_PATH=Qwen/Qwen2.5-Math-1.5B
-DATASET_PATH=HuggingFaceTB/Bespoke-Stratos-17k
+MODEL_PATH=meta-llama/Llama-3.1-8B-Instruct
+DATASET_PATH=open-r1/OpenThoughts-114k-math-H4-8k
+RUN_NAME=LLAMA8B-GR1-math-8k
 ACCELERATOR=zero3
-
-LR=6e-5
+grad_acc=2
+seq_len=32768
+LR=1e-5
+batch_size=1
 optim=adamw_torch
+max_steps=500
 #  if we need to save memory--optim {adamw_hf,adamw_torch,adamw_torch_fused,adamw_torch_xla,adamw_torch_npu_fused,adamw_apex_fused,adafactor,adamw_anyprecision,adamw_torch_4bit,adamw_torch_8bit,ademamix,sgd,adagrad,adamw_bnb_8bit,adamw_8bit,ademamix_8bit,lion_8bit,lion_32bit,paged_adamw_32bit,paged_adamw_8bit,paged_ademamix_32bit,paged_ademamix_8bit,paged_lion_32bit,paged_lion_8bit,rmsprop,rmsprop_bnb,rmsprop_bnb_8bit,rmsprop_bnb_32bit,galore_adamw,galore_adamw_8bit,galore_adafactor,galore_adamw_layerwise,galore_adamw_8bit_layerwise,galore_adafactor_layerwise,lomo,adalomo,grokadamw,schedule_free_adamw,schedule_free_sgd}
 #   --adam_beta1 ADAM_BETA1, --adam-beta1 ADAM_BETA1
 #                         Beta1 for AdamW optimizer (default: 0.9)
@@ -55,27 +59,28 @@ export CMD=" \
     --learning_rate $LR \
     --warmup_ratio 0.1 \
     --optim $optim \
-    --num_train_epochs 3 \
-    --max_steps -1 \
+    --max_steps $max_steps \
     --packing \
-    --max_seq_length 4096 \
-    --per_device_train_batch_size 4 \
-    --per_device_eval_batch_size 4 \
-    --gradient_accumulation_steps 4 \
+    --max_seq_length $seq_len \
+    --per_device_train_batch_size $batch_size \
+    --per_device_eval_batch_size $batch_size \
+    --gradient_accumulation_steps $grad_acc \
     --gradient_checkpointing \
     --bf16 \
     --logging_steps 5 \
-    --eval_strategy epoch \
-    --output_dir data/bespoke-ep3-$scheduler-$LR-optim-$optim-4k \
-    --hub_model_id HuggingFaceTB/Qwen-Math-1.5B-Bespoke-sys-ep3-$scheduler-$LR-optim-$optim-4k \
-    --report_to wandb \
+    --output_dir data/$RUN_NAME \
     --push_to_hub \
+    --hub_private_repo True \
+    --report_to wandb \
+    --save_strategy steps \
+    --save_steps 100 \
+    --hub_model_id HuggingFaceH4/$RUN_NAME \
     --hub_strategy every_save
     "
 
 export LAUNCHER="HF_HUB_ENABLE_HF_TRANSFER=1 ACCELERATE_LOG_LEVEL=info TRANSFORMERS_VERBOSITY=info accelerate launch \
     --config_file configs/$ACCELERATOR.yaml  \
-    --gradient_accumulation_steps 4 \
+    --gradient_accumulation_steps $grad_acc \
     --num_machines $NUM_NODES \
     --num_processes $WORLD_SIZE \
     --main_process_ip $MASTER_ADDR \
@@ -108,5 +113,12 @@ SRUN_ARGS=" \
     "
 
 clear; srun $SRUN_ARGS --jobid $SLURM_JOB_ID bash -c "$LAUNCHER --role \$SLURMD_NODENAME: $CMD" 2>&1
+
+echo "Waiting 1 minute before cleanup..."
+sleep 60
+
+echo "Cleaning up data/$RUN_NAME..."
+rm -rf data/$RUN_NAME
+
 
 echo "END TIME: $(date)"

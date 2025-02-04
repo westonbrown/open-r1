@@ -16,7 +16,7 @@ MODEL_ID=$3
 MODEL_REVISION=$4
 # Optional args
 [ -z "$5"] && TENSOR_PARALLEL=False || TENSOR_PARALLEL=$5
-[ -z "$6"] && TRUST_REMOTE_CODE=False || TRUST_REMOTE_CODE=$6
+[ -z "$6"] && TRUST_REMOTE_CODE=True || TRUST_REMOTE_CODE=$6
 # $7 is reserved for system_prompt, see line 51
 NUM_GPUS=$(nvidia-smi -L | wc -l)
 

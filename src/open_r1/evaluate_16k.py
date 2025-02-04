@@ -23,7 +23,7 @@ from lighteval.tasks.lighteval_task import LightevalTaskConfig
 from lighteval.tasks.requests import Doc
 from lighteval.utils.language import Language
 
-generation_size = 32768
+generation_size = 16384
 
 latex_gold_metric = multilingual_extractive_match_metric(
     language=Language.ENGLISH,
