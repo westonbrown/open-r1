@@ -40,10 +40,10 @@ class BaseTask(ABC):
 
     def __getitem__(self, item) -> tuple:
         rng = self.get_rng(item)
-        return self.generate_sample(self.config, rng)
+        return self.generate_sample(rng)
 
     @abstractmethod
-    def generate_sample(self, config: BaseConfig, rng: np.random.Generator) -> tuple:
+    def generate_sample(self, rng: np.random.Generator) -> tuple:
         # This should return a tuple of (output, answer)
         raise NotImplementedError
 

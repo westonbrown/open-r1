@@ -16,8 +16,9 @@ class LinearEquationConfig(BaseConfig):
 class LinearEquationTask(BaseTask):
     config_class = LinearEquationConfig
 
-    def generate_sample(self, config: LinearEquationConfig, rng: np.random.Generator):
+    def generate_sample(self, rng: np.random.Generator):
         variable_names = ("x", "y", "z", "a", "b", "c")
+        config = self.config
         var_name = rng.choice(variable_names)
         var_coefficient = 0
         while var_coefficient == 0:
