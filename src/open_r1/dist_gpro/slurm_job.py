@@ -1,0 +1,236 @@
+import os
+import subprocess
+import time
+import atexit
+import socket
+
+class SlurmJob:
+    """
+    A class to manage launching and monitoring Slurm jobs from another job running on the cluster,
+    using a pre-existing Slurm script.
+
+    Args:
+        name (str): A name for the Slurm job. Used for identifying the node info file.
+        script_path (str): The path to the pre-existing Slurm script.
+        command (str): The command to be executed inside the job.slurm script.
+        output_file (str, optional): The file to redirect standard output to. Defaults to "slurm-%j.out", where %j is the job ID.
+        error_file (str, optional): The file to redirect standard error to. Defaults to "slurm-%j.err".
+        wait_for_completion (bool, optional): Whether to wait for the job to complete before returning from submit.
+            Defaults to False.
+    """
+
+    def __init__(self,
+                 name,
+                 script_path,
+                 command,
+                 wait_for_completion=False,
+                 timeout=600):
+
+        self.name = name
+        self.script_path = script_path
+        self.command = command
+        self.wait_for_completion = wait_for_completion
+
+        self.job_id = None
+        self.status = None
+        self.closed = False
+        self.node_ip = None  # Store the IP address of the node
+        self.node_name = None
+        self.timeout = timeout
+        if not os.path.exists(self.script_path):
+            raise ValueError(f"Slurm script file not found: {self.script_path}")
+
+        # Register the cleanup function to be called on exit
+        atexit.register(self.close)
+
+    def submit(self):
+        """
+        Submits the job to the Slurm scheduler.
+        """
+        if self.closed:
+            print("Error: Cannot submit a job that has been closed.")
+            return None
+
+        # Submit the job using sbatch
+        try:
+            result = subprocess.run(["sbatch",
+                                   self.script_path,
+                                   self.command], # Pass the command as an argument to sbatch
+                                   capture_output=True, text=True, check=True)
+            # Extract job ID from sbatch output
+            output = result.stdout
+            self.job_id = int(output.strip().split()[-1])
+            self.status = "SUBMITTED"
+            print(f"Job {self.name} submitted with ID: {self.job_id}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error submitting job {self.name}:")
+            print(e.stderr)
+            self.status = "FAILED_SUBMISSION"
+            return None
+
+        if self.wait_for_completion:
+            self.wait()
+            self._get_node_info() # try to get node info after waiting
+
+        return self.job_id
+
+    def get_status(self):
+        """
+        Retrieves the current status of the job from Slurm.
+        """
+        if self.job_id is None:
+            return "NOT_SUBMITTED"
+
+        if self.closed:
+            return self.status
+
+        try:
+            result = subprocess.run(["sacct", "-j", str(self.job_id), "--format=State", "--noheader"], capture_output=True, text=True, check=True)
+            status_line = result.stdout.strip()
+
+            # Handle multiple job steps possibly having different states
+            if status_line:
+                statuses = status_line.split()
+                # Get the most relevant/severe status if there are multiple steps
+                if "FAILED" in statuses:
+                    self.status = "FAILED"
+                elif "TIMEOUT" in statuses:
+                    self.status = "TIMEOUT"
+                elif "CANCELLED" in statuses:
+                    self.status = "CANCELLED"
+                elif "RUNNING" in statuses:
+                    self.status = "RUNNING"
+                    # try to get node ip and name after job starts running
+                    self._get_node_info()
+                elif "PENDING" in statuses:
+                    self.status = "PENDING"
+                elif "COMPLETED" in statuses:
+                    self.status = "COMPLETED"
+                    # try to get node ip and name after job finished as well
+                    self._get_node_info()
+                else:
+                    self.status = statuses[0]  # Take the first status if unknown
+            else:
+                self.status = "UNKNOWN"
+
+        except subprocess.CalledProcessError as e:
+            print(f"Error getting status for job {self.job_id}:")
+            print(e.stderr)
+            self.status = "UNKNOWN"
+            return self.status
+
+        except Exception as e:
+            print(f"Unexpected Error getting status for job {self.job_id}:")
+            print(e)
+            self.status = "UNKNOWN"
+            return self.status
+
+        return self.status
+
+    def _get_node_info(self):
+        """
+        Attempts to retrieve the node IP address and name from the output file generated by the job script.
+        Uses SLURM_JOB_ID in the filename.
+        """
+        if self.job_id is None:
+            print("Error: Job ID is not available. Cannot retrieve node info.")
+            return
+
+        if self.node_ip is not None and self.node_name is not None:
+            return  # nothing to do
+
+        node_info_file = f"node_info_{self.job_id}.txt"
+
+        if os.path.exists(node_info_file):
+            try:
+                with open(node_info_file, "r") as f:
+                    lines = f.readlines()
+                    if len(lines) >= 2:
+                        self.node_ip = lines[0].strip()
+                        self.node_name = lines[1].strip()
+                        print(f"Job {self.job_id} running on node: {self.node_name} ({self.node_ip})")
+            except Exception as e:
+                print(f"Error reading node info file {node_info_file}: {e}")
+        else:
+            print(f"Node info file {node_info_file} not found (yet).")
+            
+    def wait_for_running(self, check_interval=10):
+        """
+        Waits for the job to reach the RUNNING state or until the timeout is reached.
+
+        Args:
+            check_interval (int): Time in seconds between status checks. Defaults to 10.
+
+        Returns:
+            bool: True if the job reached the RUNNING state, False otherwise (timeout or other state).
+        """
+        if self.closed:
+            print("Job has been closed. Cannot wait.")
+            return False
+
+        start_time = time.time()
+        while True:
+            status = self.get_status()
+
+            if status == "RUNNING":
+                print(f"Job {self.job_id} is now running.")
+                return True
+            elif status in ["COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"]:
+                print(f"Job {self.job_id} finished with status: {status}. Cannot wait for it to run")
+                return False
+            elif time.time() - start_time > self.timeout:
+                print(f"Timeout reached while waiting for job {self.job_id} to reach RUNNING state.")
+                return False
+            else:
+                print(f"Job {self.job_id} status: {status}, checking again in {check_interval} seconds...")
+                time.sleep(check_interval)
+                
+    def wait(self, check_interval=10):
+        """
+        Waits for the job to complete (either successfully or with an error).
+
+        Args:
+            check_interval (int): Time in seconds between status checks.
+        """
+        if self.closed:
+            print("Job has been closed. Cannot wait.")
+            return
+
+        while True:
+            status = self.get_status()
+            if status in ["COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"]:
+                print(f"Job {self.job_id} finished with status: {status}")
+                break
+            else:
+                print(f"Job {self.job_id} status: {status}, checking again in {check_interval} seconds...")
+                time.sleep(check_interval)
+
+    def cancel(self):
+        """
+        Cancels the job using scancel.
+        """
+        if self.job_id is None:
+            print("Job not submitted yet.")
+            return
+
+        if self.closed:
+            print("Job has been closed. Cannot cancel.")
+            return
+
+        try:
+            subprocess.run(["scancel", str(self.job_id)], check=True)
+            print(f"Job {self.job_id} cancelled.")
+            self.status = "CANCELLED"
+        except subprocess.CalledProcessError as e:
+            print(f"Error cancelling job {self.job_id}:")
+            print(e.stderr)
+
+    def close(self):
+        """
+        Closes the job, releasing resources. This will attempt to cancel the job if it's still running.
+        """
+        if not self.closed:
+            if self.status in ["RUNNING", "PENDING", "SUBMITTED"]:
+                self.cancel()
+            self.closed = True
+            print(f"Job {self.job_id} closed.")
