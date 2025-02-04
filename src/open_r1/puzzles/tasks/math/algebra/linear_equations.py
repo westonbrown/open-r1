@@ -32,6 +32,7 @@ class LinearEquationTask(BaseTask):
         var_value = int(rng.integers(config.min_var_value, config.max_var_value, endpoint=True))
         rhs = var_coefficient * var_value + constant
 
+        base_text = f"Solve for {var_name} in the following equation:\n\n"
         if constant < 0:
             equation = f"{var_coefficient}{var_name} - {-constant} = {rhs}"
         elif constant > 0:
@@ -39,9 +40,10 @@ class LinearEquationTask(BaseTask):
         else:
             equation = f"{var_coefficient}{var_name} = {rhs}"
 
-        return equation, var_value
+        return {"question": base_text + equation, "ground_truth": var_value}
 
-    def verify(self, output, answer):
+    @staticmethod
+    def verify(output, answer):
         # If there's only one number in the output, it's the answer
         numbers = re.findall(r"\d+", output)
         if len(numbers) == 1:

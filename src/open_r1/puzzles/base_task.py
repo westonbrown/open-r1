@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from random import randint
+from datasets import Dataset
 
 import numpy as np
 
@@ -38,16 +39,20 @@ class BaseTask(ABC):
     def get_rng(self, idx) -> np.random.Generator:
         return np.random.default_rng(self.scrambled_seed + idx)
 
-    def __getitem__(self, item) -> tuple:
+    def __getitem__(self, item) -> dict:
         rng = self.get_rng(item)
         return self.generate_sample(rng)
 
     @abstractmethod
-    def generate_sample(self, rng: np.random.Generator) -> tuple:
+    def generate_sample(self, rng: np.random.Generator) -> dict:
         # This should return a tuple of (output, answer)
         raise NotImplementedError
 
+    @staticmethod
     @abstractmethod
-    def verify(self, output, answer) -> float:
+    def verify(output, answer) -> float:
         # This should return a score between 0. and 1. based on how well the output matches the answer
         raise NotImplementedError
+
+    def to_dataset(self):
+        return Dataset.from_generator(self.__iter__)

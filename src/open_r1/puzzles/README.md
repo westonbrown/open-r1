@@ -10,13 +10,13 @@ After `pip install`ing the open-r1 repo, you can very quickly get started
 >>> from open_r1.puzzles import LinearEquationConfig, LinearEquationTask
 
 >>> task = LinearEquationTask()
->>> # Tasks are iterable, so you can iterate with "for question, answer in task:"
->>> question, answer = next(iter(task))
->>> print(question)
+>>> # Tasks are iterable, so you can iterate with "for question in task:"
+>>> question = next(iter(task))
+>>> print(question["question"])
 '-2y - 4 = -16'
 
 # To score a model output, use task.validate()
->>> task.verify("y = 6", answer)
+>>> task.verify("y = 6", question["answer"])
 1.0
 
 >>> # To control the task difficulty, you can use the task's associated config
@@ -26,9 +26,49 @@ After `pip install`ing the open-r1 repo, you can very quickly get started
 >>> harder_task = LinearEquationTask(config)
 ```
 
+## Training with puzzles
+
+Training with puzzles is also easy! Puzzles come with a `to_dataset()` method that returns a `Dataset` object. Each
+task instance should have a `ground_truth` key that you can use with the task's `verify` method to get a reward
+function:
+
+```python
+from open_r1.puzzles import LinearEquationTask, LinearEquationConfig
+from trl import GRPOConfig, GRPOTrainer
+
+config = LinearEquationConfig(num_tasks=1000)
+task = LinearEquationTask(config)
+dataset = task.to_dataset()
+
+def reward_func(completions, ground_truth, **kwargs):
+    return [task.verify(completion, answer) for completion, answer in zip(completions, ground_truth)]
+
+training_args = GRPOConfig(output_dir="Qwen2-0.5B-GRPO", logging_steps=10)
+trainer = GRPOTrainer(
+    model="Qwen/Qwen2-0.5B-Instruct",
+    reward_funcs=reward_func,
+    args=training_args,
+    train_dataset=dataset,
+)
+trainer.train()
+```
+
 ## Adding new puzzles
 
-[add puzzle guide goes here]
+Adding a new puzzle is easy! You can use the [LinearEquationTask](https://github.com/huggingface/open-r1/blob/main/src/open_r1/puzzles/tasks/math/algebra/linear_equations.py)
+as a guide. To add a new task:
+
+1) Create a new task file in the appropriate subdirectory of `open_r1/puzzles/tasks/`
+2) In the task file, create a `Task` class that inherits from `BaseTask` and a `Config` class that inherits from `BaseConfig`.
+3) For the `Config` class, add any config properties your `Task` is going to use
+4) For the `Task` class, set `config_class` to the `Config` class you just created and implement two methods:
+    - `generate_sample` should return a tuple of a task question, and the correct answer. Importantly, the task receives `rng` as an argument,
+      which is an instance of a NumPy generator class. Any random generations, shuffles, etc. that your class needs to generate task instances
+      should use methods on `rng`. You should **never** `import random` and generate your own random numbers, or else reproducibility will be lost!
+    - `verify` receives `output` and `answer` as arguments and returns a score between 0 and 1. Some tasks may only return 0. for incorrect answers
+      and 1. for correct answers, while others may have scores in between for partially-correct answers. `verify` should be a `@staticmethod`.
+5) Finally, when it's all ready, import your task and config in the `__init__.py` file of `open_r1/puzzles`, and add your
+   task and config class to `__all__` in that file.
 
 ## Coming soon:
 
