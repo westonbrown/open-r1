@@ -248,12 +248,12 @@ We are able to reproduce Deepseek's reported results on the GPQA Diamond benchma
 
 | Model                         | GPQA Diamond (HF lighteval) | GPQA Diamond (DeepSeek Reported) |
 |:------------------------------|:---------------------------:|:--------------------------------:|
-| DeepSeek-R1-Distill-Qwen-1.5B |            33.33             |               33.8               |
-| DeepSeek-R1-Distill-Qwen-7B   |            45.45             |               49.1               |
-| DeepSeek-R1-Distill-Qwen-14B  |            x            |               59.1               |
-| DeepSeek-R1-Distill-Qwen-32B  |            x             |               62.1               |
-| DeepSeek-R1-Distill-Llama-8B  |            x           |               49.0               |
-| DeepSeek-R1-Distill-Llama-70B |            x            |               65.2               |
+| DeepSeek-R1-Distill-Qwen-1.5B |            33.33            |               33.8               |
+| DeepSeek-R1-Distill-Qwen-7B   |            45.45            |               49.1               |
+| DeepSeek-R1-Distill-Qwen-14B  |              x              |               59.1               |
+| DeepSeek-R1-Distill-Qwen-32B  |              x              |               62.1               |
+| DeepSeek-R1-Distill-Llama-8B  |            48.99            |               49.0               |
+| DeepSeek-R1-Distill-Llama-70B |              x              |               65.2               |
 
 To reproduce these results use the following command:
 
